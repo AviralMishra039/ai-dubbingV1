@@ -120,6 +120,7 @@ def _generate_gemini_tts(
                 "-ar", "24000",      # 24kHz
                 "-ac", "1",          # mono
                 "-i", pcm_path,
+                "-filter:a", "volume=4.0",  # Boost quiet Gemini audio
                 "-acodec", "pcm_s16le",
                 output_path,
             ],

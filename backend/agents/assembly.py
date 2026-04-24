@@ -145,7 +145,7 @@ def assembly_agent(state: DubbingState) -> dict:
         mix_audio_tracks(
             [dubbed_voice_path, background_path],
             final_audio_path,
-            weights="1 0.7",
+            weights="1.0 0.15",  # Strongly favor voice (1.0) over background (0.15)
         )
     else:
         logger.info("No background track available — using dubbed voice only")
