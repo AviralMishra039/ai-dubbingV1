@@ -1,0 +1,23 @@
+# Core backend
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+python-dotenv==1.0.1
+
+# LangGraph + LangChain
+langgraph==0.2.34
+langchain-core==0.3.15
+langchain-google-genai==2.0.4
+
+# Google AI
+google-generativeai==0.8.3
+google-cloud-texttospeech==2.17.2
+
+# Speech & Audio ML
+faster-whisper==1.0.3
+pyannote.audio==3.3.2
+demucs==4.0.1
+
+# TTS
+elevenlabs==1.9.0
+requests==2.32.3
