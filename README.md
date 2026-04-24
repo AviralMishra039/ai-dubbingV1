@@ -176,6 +176,22 @@ dubbing-agent/
 └── README.md
 ```
 
+## Production Scaling
+
+While this repository is a beautifully functioning prototype optimized for local hardware constraints (like fitting heavy ML models into a 6GB VRAM GPU), scaling it for a production application requires the following architectural upgrades:
+
+1. **Asynchronous Job Queues:**
+   The current FastAPI `/dub` endpoint is synchronous, hanging open while the AI processes the video. In production, integrate **Celery + Redis** (or AWS SQS) so the API instantly returns a `job_id` and runs the LangGraph pipeline asynchronously in the background.
+
+2. **GPU Concurrency (VRAM Locks):**
+   To prevent Out Of Memory (OOM) errors, this pipeline strictly loads models sequentially (Demucs, Pyannote, Whisper) and explicitly clears VRAM. For concurrent users, separate the FastAPI server from LangGraph workers, running workers on dedicated cloud GPUs (like AWS A10Gs) where each worker processes one queue item at a time.
+
+3. **Cloud Storage (S3):**
+   The pipeline currently relies on local disk storage (`./temp` and `./outputs`). Update the backend to download input videos from an AWS S3 bucket and upload the final `_dubbed.mp4` back to S3, rather than risking data loss in stateless Docker containers.
+
+4. **API Rate Limiting & Retries:**
+   Generative APIs have strict quotas. Add a robust retry mechanism with exponential backoff (e.g., using the `tenacity` Python library) to the LangGraph agents to automatically handle "Too Many Requests" (HTTP 429) errors without failing the entire job.
+
 ## License
 
 MIT
