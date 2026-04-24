@@ -15,7 +15,7 @@ A LangGraph-orchestrated multi-agent pipeline for dubbing videos between **Hindi
 │                                          ↓                  │
 │  ┌──────────┐  ┌───────────────┐  ┌─────────────┐          │
 │  │ Assembly  │←│   Director    │←│    TTS       │          │
-│  │ (FFmpeg)  │  │  (Routing)   │  │(ElevenLabs) │          │
+│  │ (FFmpeg)  │  │  (Routing)   │  │  (Gemini)   │          │
 │  └──────────┘  └───────────────┘  └─────────────┘          │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -26,13 +26,13 @@ A LangGraph-orchestrated multi-agent pipeline for dubbing videos between **Hindi
 | Analysis | Scene context, speaker profiles | Gemini 2.5 Flash Vision |
 | Transcription | Speech-to-text + diarization | Demucs + pyannote + faster-whisper |
 | Translation | Context-aware dubbing translation | Gemini 2.5 Flash |
-| TTS | Voice synthesis | ElevenLabs (primary) / Google TTS (fallback) |
+| TTS | Voice synthesis | Gemini 3.1 Flash TTS (primary) / Google TTS (fallback) |
 | Assembly | Audio mixing + video merge | FFmpeg (CPU only) |
 | Director | Routing & validation | Conditional edges (no LLM) |
 
 ## Prerequisites
 
-- **OS:** WSL2 Ubuntu (Windows) or native Linux
+- **OS:** Windows or Linux
 - **GPU:** NVIDIA GPU with CUDA support (tested on RTX 4050 6GB)
 - **System packages:** FFmpeg, git-lfs
 - **Python:** 3.10+
@@ -51,7 +51,7 @@ git lfs install
 
 ## Setup
 
-### 1. Install PyTorch with CUDA (WSL2)
+### 1. Install PyTorch with CUDA
 
 **Do this first** — PyTorch must be installed with CUDA support before the other ML packages.
 
@@ -92,16 +92,7 @@ Edit `.env` and fill in your keys:
 - Create a token with `read` access
 - Accept the model terms at [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
 
-#### ElevenLabs API Key + Voice IDs
-- Sign up at [ElevenLabs](https://elevenlabs.io)
-- Get your API key from Profile → API Keys
-- **Finding Voice IDs for Hindi:**
-  1. Go to [ElevenLabs Voice Library](https://elevenlabs.io/voice-library)
-  2. Search for "Hindi" in the voice library
-  3. Click on a voice → the URL will contain the voice ID
-  4. Or use the API: `GET https://api.elevenlabs.io/v1/voices` with your API key
-  5. Look for voices tagged with Hindi language support
-  6. Copy the `voice_id` values into your `.env`
+
 
 #### Google Cloud TTS (Fallback)
 - Create a service account at [Google Cloud Console](https://console.cloud.google.com/)
@@ -164,7 +155,7 @@ dubbing-agent/
 │   │   ├── analysis.py          # Gemini Vision scene analysis
 │   │   ├── transcription.py     # Demucs + pyannote + whisper
 │   │   ├── translation.py       # Gemini translation + SSML
-│   │   ├── tts.py               # ElevenLabs + Google TTS
+│   │   ├── tts.py               # Gemini 3.1 TTS + Google TTS
 │   │   └── assembly.py          # FFmpeg audio + video merge
 │   ├── utils/
 │   │   ├── ffmpeg.py            # FFmpeg subprocess wrappers
