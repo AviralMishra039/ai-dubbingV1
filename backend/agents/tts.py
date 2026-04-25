@@ -223,12 +223,21 @@ def tts_agent(state: DubbingState) -> dict:
     gemini_tts_exhausted = False
     audio_segments = []
 
-    for seg in translated_segments:
+    for idx, seg in enumerate(translated_segments):
         seg_id = seg["id"]
         speaker_id = seg["speaker_id"]
         translated_text = seg["translated"]
         ssml_hints = seg.get("ssml_hints", "")
         original_duration = seg["end"] - seg["start"]
+        
+        # Smart Overlapping: Calculate how much silence exists until the NEXT person talks
+        available_duration = original_duration
+        if idx + 1 < len(translated_segments):
+            next_start = translated_segments[idx + 1]["start"]
+            if next_start > seg["start"]:
+                available_duration = next_start - seg["start"]
+        else:
+            available_duration = original_duration + 5.0  # Give last segment extra breathing room
 
         output_path = str(
             Path(segments_dir) / f"segment_{seg_id}_{speaker_id}.wav"
@@ -280,8 +289,8 @@ def tts_agent(state: DubbingState) -> dict:
             actual_duration = original_duration
 
         needs_stretch = (
-            original_duration > 0
-            and actual_duration > original_duration * DURATION_STRETCH_THRESHOLD
+            available_duration > 0
+            and actual_duration > available_duration * DURATION_STRETCH_THRESHOLD
         )
 
         audio_segments.append({
@@ -291,6 +300,7 @@ def tts_agent(state: DubbingState) -> dict:
             "file_path": generated_path,
             "duration": actual_duration,
             "original_duration": original_duration,
+            "available_duration": available_duration,
             "speaker_id": speaker_id,
             "needs_stretch": needs_stretch,
         })
@@ -298,7 +308,7 @@ def tts_agent(state: DubbingState) -> dict:
         if needs_stretch:
             logger.warning(
                 f"Segment {seg_id} is {actual_duration:.2f}s vs "
-                f"{original_duration:.2f}s original — flagged for stretch"
+                f"{available_duration:.2f}s available — flagged for stretch"
             )
 
     if not audio_segments:

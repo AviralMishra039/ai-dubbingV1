@@ -31,7 +31,8 @@ Scene context: {scene_context}
 Speaker profile: {speaker_profile}
 
 Translation rules:
-- Preserve natural spoken rhythm — translated text should take approximately the same time to speak as the original
+- CRITICAL: The translated text MUST be extremely concise. Do not use more syllables than the original English sentence. If you must summarize the meaning to keep it short, do so.
+- Preserve natural spoken rhythm — translated text should take approximately the same time or LESS to speak as the original
 - Match the emotional register exactly: angry stays angry, whispered stays intimate, shouted stays intense
 - Keep proper nouns, character names, place names as-is
 - Do NOT translate literally word for word

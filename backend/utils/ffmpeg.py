@@ -119,6 +119,34 @@ def extract_audio(video_path: str, output_path: str) -> str:
     return output_path
 
 
+def extract_audio_segment(input_path: str, output_path: str, start: float, duration: float) -> str:
+    """Extract a specific segment of audio to a new file.
+    
+    Args:
+        input_path: Path to the input audio file.
+        output_path: Path for the extracted audio slice.
+        start: Start time in seconds.
+        duration: Duration in seconds.
+    """
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    
+    _run(
+        [
+            "ffmpeg", "-y",
+            "-ss", f"{start:.3f}",
+            "-t", f"{duration:.3f}",
+            "-i", str(input_path),
+            "-acodec", "pcm_s16le",
+            "-ar", "16000",
+            "-ac", "1",
+            str(output_path),
+        ],
+        description="extract_audio_segment",
+    )
+    
+    return output_path
+
+
 def get_duration(file_path: str) -> float:
     """Get the duration of a media file in seconds using ffprobe.
     

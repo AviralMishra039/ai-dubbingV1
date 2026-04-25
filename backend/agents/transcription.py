@@ -17,8 +17,10 @@ from backend.state import DubbingState
 from backend.config import (
     WHISPER_MODEL_SIZE,
     PYANNOTE_AUTH_TOKEN,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
 )
-from backend.utils.ffmpeg import extract_audio
+from backend.utils.ffmpeg import extract_audio, extract_audio_segment
 from backend.utils.gpu import clear_gpu_memory, is_cuda_available, get_compute_type
 
 logger = logging.getLogger(__name__)
@@ -304,6 +306,104 @@ def _merge_transcription_diarization(
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Step 6: Audio Gender Detection
+# ──────────────────────────────────────────────────────────────────────────
+
+def _detect_audio_genders(
+    merged_segments: list[dict],
+    audio_path: str,
+    temp_dir: str,
+    existing_profiles: dict,
+) -> dict:
+    """Detect gender for EVERY segment using Gemini audio analysis.
+    
+    When diarization fails (common), all segments are labeled SPEAKER_00.
+    This function detects gender per-segment and reassigns speaker IDs
+    so that male segments get SPEAKER_MALE and female segments get
+    SPEAKER_FEMALE, ensuring the TTS agent picks the correct voice.
+    """
+    logger.info("Detecting speaker genders from audio clips (per-segment)...")
+    
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel(GEMINI_MODEL)
+    except Exception as e:
+        logger.warning(f"Failed to initialize Gemini API for gender detection: {e}")
+        return dict(existing_profiles) if existing_profiles else {}
+    
+    # Check if all segments share the same speaker (diarization likely failed)
+    unique_speakers = set(seg["speaker_id"] for seg in merged_segments)
+    diarization_failed = len(unique_speakers) <= 1
+    
+    if diarization_failed:
+        logger.info(
+            "All segments have same speaker ID — diarization likely failed. "
+            "Detecting gender per-segment to reassign speaker IDs."
+        )
+    
+    gender_samples_dir = str(Path(temp_dir) / "gender_samples")
+    Path(gender_samples_dir).mkdir(parents=True, exist_ok=True)
+    
+    for seg in merged_segments:
+        seg_id = seg["id"]
+        dur = seg["end"] - seg["start"]
+        
+        if dur < 0.5:
+            # Too short to reliably detect — keep existing assignment
+            logger.info(f"Segment {seg_id}: too short ({dur:.1f}s), skipping gender detection")
+            continue
+        
+        clip_path = str(Path(gender_samples_dir) / f"gender_seg_{seg_id}.wav")
+        try:
+            clip_dur = min(dur, 5.0)  # Cap at 5 seconds
+            extract_audio_segment(audio_path, clip_path, seg["start"], clip_dur)
+            
+            with open(clip_path, "rb") as f:
+                audio_bytes = f.read()
+                
+            prompt = "Listen to this voice. Is the speaker male or female? Reply with exactly one word: 'male' or 'female'."
+            response = model.generate_content([
+                {"mime_type": "audio/wav", "data": audio_bytes},
+                prompt
+            ])
+            
+            ans = response.text.strip().lower()
+            detected_gender = "female" if "female" in ans else "male"
+            
+            # Reassign speaker ID based on detected gender
+            if diarization_failed:
+                seg["speaker_id"] = f"SPEAKER_{'FEMALE' if detected_gender == 'female' else 'MALE'}"
+            
+            logger.info(
+                f"Segment {seg_id}: detected={detected_gender}, "
+                f"speaker_id={seg['speaker_id']}"
+            )
+            
+        except Exception as e:
+            logger.warning(f"Gender detection failed for segment {seg_id}: {e}")
+    
+    # Build profiles from the final speaker IDs
+    profiles = {}
+    for seg in merged_segments:
+        sid = seg["speaker_id"]
+        if sid not in profiles:
+            if "FEMALE" in sid:
+                profiles[sid] = {"gender": "female", "emotion": "neutral", "style": "conversational"}
+            else:
+                profiles[sid] = {"gender": "male", "emotion": "neutral", "style": "conversational"}
+    
+    # Merge with any existing profiles (from analysis agent)
+    if existing_profiles:
+        for k, v in existing_profiles.items():
+            if k not in profiles:
+                profiles[k] = v
+    
+    logger.info(f"Gender detection complete. Profiles: {profiles}")
+    return profiles
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # Main agent function
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -383,10 +483,24 @@ def transcription_agent(state: DubbingState) -> dict:
             "Merge produced zero segments after filtering empty text."
         )
 
+    # ── Step 6: Audio Gender Detection ──────────────────────────────────
+    logger.info("Step 6: Running audio-based gender detection...")
+    speaker_profiles = state.get("speaker_profiles", {})
+    updated_profiles = _detect_audio_genders(
+        merged_segments,
+        transcription_audio,
+        temp_dir,
+        speaker_profiles
+    )
+    
+    # We update the state by returning 'speaker_profiles' in the updates dict.
+    # Since state is a dict that LangGraph merges, this overwrites the old profiles.
+    
     logger.info(f"Transcription complete: {len(merged_segments)} segments")
 
     return {
         "segments": merged_segments,
+        "speaker_profiles": updated_profiles,
         "vocals_path": vocals_path,
         "background_path": background_path,
         "current_step": "transcription_complete",

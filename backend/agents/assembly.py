@@ -72,6 +72,7 @@ def assembly_agent(state: DubbingState) -> dict:
         input_path = seg["file_path"]
         actual_dur = seg["duration"]
         original_dur = seg["original_duration"]
+        available_dur = seg.get("available_duration", original_dur)
         needs_stretch = seg.get("needs_stretch", False)
 
         fixed_path = str(Path(assembly_dir) / f"fixed_{seg_id}.wav")
@@ -84,12 +85,12 @@ def assembly_agent(state: DubbingState) -> dict:
             )
             pad_audio_with_silence(input_path, fixed_path, original_dur)
 
-        elif needs_stretch and actual_dur > original_dur:
-            # Speed up to fit original duration
-            ratio = actual_dur / original_dur
+        elif needs_stretch and actual_dur > available_dur:
+            # Speed up to fit available duration
+            ratio = actual_dur / available_dur
             logger.info(
                 f"Segment {seg_id}: stretching {actual_dur:.2f}s → "
-                f"{original_dur:.2f}s (ratio={ratio:.2f})"
+                f"{available_dur:.2f}s (ratio={ratio:.2f})"
             )
             stretch_audio(input_path, fixed_path, ratio)
 
